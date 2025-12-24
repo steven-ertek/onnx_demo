@@ -1,0 +1,8 @@
+.venv
+.python-version
+__pycache__/
+build/
+batch_results_*
+onnx_batch_timing.txt
+openvino_batch_timing.txt
+models/
