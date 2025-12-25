@@ -83,8 +83,8 @@ public:
         cv::Mat prob(out_h, out_w, CV_32F);
         for (int h = 0; h < out_h; ++h) {
             for (int w = 0; w < out_w; ++w) {
-                float raw = data[h * out_w + w];
-                prob.at<float>(h, w) = 1.0f / (1.0f + std::exp(-raw));
+                // 模型输出已包含 sigmoid，直接使用
+                prob.at<float>(h, w) = data[h * out_w + w];
             }
         }
         return prob;
@@ -106,12 +106,14 @@ private:
 };
 
 cv::Mat preprocess(const cv::Mat& image, int target_w, int target_h) {
-    cv::Mat resized;
-    cv::resize(image, resized, cv::Size(target_w, target_h));
+    // 先转换为 RGB，再 resize（与 PyTorch 版本一致）
     cv::Mat rgb;
-    cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
-    rgb.convertTo(rgb, CV_32FC3, 1.0 / 255.0);
-    return rgb;
+    cv::cvtColor(image, rgb, cv::COLOR_BGR2RGB);
+    cv::Mat resized;
+    cv::resize(rgb, resized, cv::Size(target_w, target_h));
+    // 归一化到 [0, 1]
+    resized.convertTo(resized, CV_32FC3, 1.0 / 255.0);
+    return resized;
 }
 
 std::vector<float> to_chw(const cv::Mat& rgb) {
@@ -147,14 +149,14 @@ void save_results(const cv::Mat& original, const cv::Mat& prob, const std::files
     cv::Mat combined;
     cv::hconcat(original_resized, binary_color, combined);
 
-    cv::imwrite((out_dir / (stem + "_binary.png")).string(), binary_u8);
+    // cv::imwrite((out_dir / (stem + "_binary.png")).string(), binary_u8);
     cv::imwrite((out_dir / (stem + "_combined.png")).string(), combined);
 }
 } // namespace
 
 int main() {
     try {
-        const std::filesystem::path model_path = "D:/ertek_codebase/onnx_demo/models/model.onnx";
+        const std::filesystem::path model_path = "D:/ertek_codebase/onnx_demo/models/best.onnx";
         const std::filesystem::path image_root = "D:/ertek_data/scratch_data/images";
         const std::filesystem::path list_file = "D:/ertek_codebase/onnx_demo/test.txt";
         const std::filesystem::path output_dir = "D:/ertek_codebase/onnx_demo/batch_results_openvino";

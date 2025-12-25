@@ -96,8 +96,8 @@ public:
         cv::Mat prob(out_h, out_w, CV_32F);
         for (int h = 0; h < out_h; ++h) {
             for (int w = 0; w < out_w; ++w) {
-                float raw = data[h * out_w + w];
-                prob.at<float>(h, w) = 1.0f / (1.0f + std::exp(-raw));
+                // 模型输出已包含 sigmoid，直接使用
+                prob.at<float>(h, w) = data[h * out_w + w];
             }
         }
         return prob;
@@ -121,12 +121,14 @@ private:
 };
 
 cv::Mat preprocess(const cv::Mat& image, int target_width, int target_height) {
-    cv::Mat resized;
-    cv::resize(image, resized, cv::Size(target_width, target_height));
+    // 先转换为 RGB，再 resize（与 PyTorch 版本一致）
     cv::Mat rgb;
-    cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
-    rgb.convertTo(rgb, CV_32FC3, 1.0 / 255.0);
-    return rgb;
+    cv::cvtColor(image, rgb, cv::COLOR_BGR2RGB);
+    cv::Mat resized;
+    cv::resize(rgb, resized, cv::Size(target_width, target_height));
+    // 归一化到 [0, 1]
+    resized.convertTo(resized, CV_32FC3, 1.0 / 255.0);
+    return resized;
 }
 
 std::vector<float> to_chw(const cv::Mat& rgb) {
@@ -171,7 +173,7 @@ void save_outputs(const cv::Mat& original, const cv::Mat& prob, const std::strin
 
 int main() {
     try {
-        const std::string model_path = "D:/ertek_codebase/onnx_demo/models/model.onnx";
+        const std::string model_path = "D:/ertek_codebase/onnx_demo/models/best.onnx";
         const std::string image_path = "D:/ertek_data/scratch_data/images/Temp0027F_0_0_0_832.png";
         const std::string output_prefix = "onnxruntime_cpu_inference";
 
