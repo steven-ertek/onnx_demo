@@ -163,6 +163,7 @@ void print_usage(const char* program_name) {
     std::cout << "  --output <path>       Output directory for results (default: batch_results_openvino)\n";
     std::cout << "  --batch <size>        Batch size for inference (default: 8)\n";
     std::cout << "  --timing <path>       Timing report file (default: openvino_batch_timing.txt)\n";
+    std::cout << "  --save <0|1>          Save prediction images (default: 1, 0=no save)\n";
     std::cout << "  --help                Show this help message\n";
 }
 
@@ -174,6 +175,7 @@ int main(int argc, char* argv[]) {
     std::filesystem::path output_dir = "batch_results_openvino";
     std::filesystem::path timing_report = "openvino_batch_timing.txt";
     int batch_size = 8;
+    bool enable_save = true;
 
     // 解析命令行参数
     for (int i = 1; i < argc; ++i) {
@@ -193,6 +195,8 @@ int main(int argc, char* argv[]) {
             batch_size = std::stoi(argv[++i]);
         } else if (arg == "--timing" && i + 1 < argc) {
             timing_report = argv[++i];
+        } else if (arg == "--save" && i + 1 < argc) {
+            enable_save = (std::stoi(argv[++i]) != 0);
         } else {
             std::cerr << "Unknown option: " << arg << "\n";
             print_usage(argv[0]);
@@ -264,7 +268,9 @@ int main(int argc, char* argv[]) {
             double duration = std::chrono::duration<double, std::milli>(end - start).count();
             inference_times.push_back(duration);
 
-            save_results(original, prob, output_dir, image_path.stem().string());
+            if (enable_save) {
+                save_results(original, prob, output_dir, image_path.stem().string());
+            }
 
             ++processed;
             if ((processed + errors) % 50 == 0 && !inference_times.empty()) {

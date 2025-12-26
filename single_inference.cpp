@@ -177,6 +177,7 @@ void print_usage(const char* program_name) {
     std::cout << "  --model <path>        Path to ONNX model (default: models/best.onnx)\n";
     std::cout << "  --image <path>        Path to input image (required)\n";
     std::cout << "  --output <prefix>     Output file prefix (default: onnxruntime_cpu_inference)\n";
+    std::cout << "  --save <0|1>          Save prediction images (default: 1, 0=no save)\n";
     std::cout << "  --help                Show this help message\n";
 }
 
@@ -185,6 +186,7 @@ int main(int argc, char* argv[]) {
     std::string model_path = "models/best.onnx";
     std::string image_path;
     std::string output_prefix = "onnxruntime_cpu_inference";
+    bool enable_save = true;
 
     // 解析命令行参数
     for (int i = 1; i < argc; ++i) {
@@ -198,6 +200,8 @@ int main(int argc, char* argv[]) {
             image_path = argv[++i];
         } else if (arg == "--output" && i + 1 < argc) {
             output_prefix = argv[++i];
+        } else if (arg == "--save" && i + 1 < argc) {
+            enable_save = (std::stoi(argv[++i]) != 0);
         } else {
             std::cerr << "Unknown option: " << arg << "\n";
             print_usage(argv[0]);
@@ -244,8 +248,12 @@ int main(int argc, char* argv[]) {
         auto duration = std::chrono::duration<double, std::milli>(end - start).count();
         std::cout << "[ONNX Runtime - CPU] Inference time: " << duration << " ms" << std::endl;
 
-        save_outputs(image, prob, output_prefix);
-        std::cout << "Result saved: " << output_prefix << "_result.png" << std::endl;
+        if (enable_save) {
+            save_outputs(image, prob, output_prefix);
+            std::cout << "Result saved: " << output_prefix << "_result.png" << std::endl;
+        } else {
+            std::cout << "Skipping save (--save 0)" << std::endl;
+        }
     } catch (const std::exception& ex) {
         std::cerr << "Error: " << ex.what() << std::endl;
         std::cout << "Press Enter to exit...";
