@@ -9,7 +9,7 @@ print("=" * 60)
 print("ONNX Model File Sizes")
 print("=" * 60)
 
-model_files = ["models/best.onnx", "models/model.onnx", "models/model_int8.onnx"]
+model_files = ["models/best.onnx", "models/model.onnx", "models/best_fixed.onnx"]
 for model_file in model_files:
     if os.path.exists(model_file):
         size_mb = os.path.getsize(model_file) / (1024 * 1024)

@@ -171,11 +171,47 @@ void save_outputs(const cv::Mat& original, const cv::Mat& prob, const std::strin
 }
 } // namespace
 
-int main() {
+void print_usage(const char* program_name) {
+    std::cout << "Usage: " << program_name << " [options]\n";
+    std::cout << "Options:\n";
+    std::cout << "  --model <path>        Path to ONNX model (default: models/best.onnx)\n";
+    std::cout << "  --image <path>        Path to input image (required)\n";
+    std::cout << "  --output <prefix>     Output file prefix (default: onnxruntime_cpu_inference)\n";
+    std::cout << "  --help                Show this help message\n";
+}
+
+int main(int argc, char* argv[]) {
+    // 默认值
+    std::string model_path = "models/best.onnx";
+    std::string image_path;
+    std::string output_prefix = "onnxruntime_cpu_inference";
+
+    // 解析命令行参数
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--help" || arg == "-h") {
+            print_usage(argv[0]);
+            return 0;
+        } else if (arg == "--model" && i + 1 < argc) {
+            model_path = argv[++i];
+        } else if (arg == "--image" && i + 1 < argc) {
+            image_path = argv[++i];
+        } else if (arg == "--output" && i + 1 < argc) {
+            output_prefix = argv[++i];
+        } else {
+            std::cerr << "Unknown option: " << arg << "\n";
+            print_usage(argv[0]);
+            return 1;
+        }
+    }
+
     try {
-        const std::string model_path = "D:/ertek_codebase/onnx_demo/models/best.onnx";
-        const std::string image_path = "D:/ertek_data/scratch_data/images/Temp0027F_0_0_0_832.png";
-        const std::string output_prefix = "onnxruntime_cpu_inference";
+        // 检查必需参数
+        if (image_path.empty()) {
+            std::cerr << "Error: --image parameter is required\n\n";
+            print_usage(argv[0]);
+            return 1;
+        }
 
         if (!std::filesystem::exists(model_path)) {
             std::cerr << "Model not found: " << model_path << std::endl;

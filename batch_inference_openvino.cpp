@@ -154,13 +154,53 @@ void save_results(const cv::Mat& original, const cv::Mat& prob, const std::files
 }
 } // namespace
 
-int main() {
+void print_usage(const char* program_name) {
+    std::cout << "Usage: " << program_name << " [options]\n";
+    std::cout << "Options:\n";
+    std::cout << "  --model <path>        Path to ONNX model (default: models/model.onnx)\n";
+    std::cout << "  --images <path>       Root directory containing images (default: D:/ertek_data/scratch_data/images)\n";
+    std::cout << "  --list <path>         Text file with image names (default: test.txt)\n";
+    std::cout << "  --output <path>       Output directory for results (default: batch_results_openvino)\n";
+    std::cout << "  --batch <size>        Batch size for inference (default: 8)\n";
+    std::cout << "  --timing <path>       Timing report file (default: openvino_batch_timing.txt)\n";
+    std::cout << "  --help                Show this help message\n";
+}
+
+int main(int argc, char* argv[]) {
+    // 默认值
+    std::filesystem::path model_path = "models/model.onnx";
+    std::filesystem::path image_root = "D:/ertek_data/scratch_data/images";
+    std::filesystem::path list_file = "test.txt";
+    std::filesystem::path output_dir = "batch_results_openvino";
+    std::filesystem::path timing_report = "openvino_batch_timing.txt";
+    int batch_size = 8;
+
+    // 解析命令行参数
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--help" || arg == "-h") {
+            print_usage(argv[0]);
+            return 0;
+        } else if (arg == "--model" && i + 1 < argc) {
+            model_path = argv[++i];
+        } else if (arg == "--images" && i + 1 < argc) {
+            image_root = argv[++i];
+        } else if (arg == "--list" && i + 1 < argc) {
+            list_file = argv[++i];
+        } else if (arg == "--output" && i + 1 < argc) {
+            output_dir = argv[++i];
+        } else if (arg == "--batch" && i + 1 < argc) {
+            batch_size = std::stoi(argv[++i]);
+        } else if (arg == "--timing" && i + 1 < argc) {
+            timing_report = argv[++i];
+        } else {
+            std::cerr << "Unknown option: " << arg << "\n";
+            print_usage(argv[0]);
+            return 1;
+        }
+    }
+
     try {
-        const std::filesystem::path model_path = "D:/ertek_codebase/onnx_demo/models/best.onnx";
-        const std::filesystem::path image_root = "D:/ertek_data/scratch_data/images";
-        const std::filesystem::path list_file = "D:/ertek_codebase/onnx_demo/test.txt";
-        const std::filesystem::path output_dir = "D:/ertek_codebase/onnx_demo/batch_results_openvino";
-        const std::filesystem::path timing_report = "D:/ertek_codebase/onnx_demo/openvino_batch_timing.txt";
         
         if (!std::filesystem::exists(model_path)) {
             std::cerr << "Model not found: " << model_path << std::endl;
@@ -200,7 +240,6 @@ int main() {
         size_t processed = 0;
         size_t errors = 0;
 
-        auto total_start = std::chrono::high_resolution_clock::now();
         for (size_t idx = 0; idx < image_names.size(); ++idx) {
             const std::filesystem::path image_path = image_root / image_names[idx];
             if (!std::filesystem::exists(image_path)) {
@@ -237,11 +276,10 @@ int main() {
                           << " ms" << std::endl;
             }
         }
-        auto total_end = std::chrono::high_resolution_clock::now();
-        double total_time = std::chrono::duration<double, std::milli>(total_end - total_start).count();
 
         double avg_time = inference_times.empty() ? 0.0 :
             std::accumulate(inference_times.begin(), inference_times.end(), 0.0) / inference_times.size();
+        double total_inference_time = std::accumulate(inference_times.begin(), inference_times.end(), 0.0);
 
         std::cout << "========================================\n";
         std::cout << "Batch Summary\n";
@@ -249,11 +287,8 @@ int main() {
         std::cout << "Total images: " << image_names.size() << "\n";
         std::cout << "Processed: " << processed << "\n";
         std::cout << "Errors: " << errors << "\n";
-        std::cout << "Total time: " << std::fixed << std::setprecision(2) << total_time << " ms\n";
-        std::cout << "Average inference: " << avg_time << " ms\n";
-        if (processed > 0) {
-            std::cout << "Total per-image (wall): " << (total_time / processed) << " ms\n";
-        }
+        std::cout << "Total inference time: " << std::fixed << std::setprecision(2) << total_inference_time << " ms\n";
+        std::cout << "Average inference time: " << avg_time << " ms\n";
         std::cout << "Results saved to: " << output_dir << "\n";
         std::cout << "========================================\n";
 
@@ -265,11 +300,8 @@ int main() {
             timing_out << "Total images: " << image_names.size() << "\n";
             timing_out << "Successfully processed: " << processed << "\n";
             timing_out << "Errors: " << errors << "\n";
-            timing_out << "Total processing time: " << total_time << " ms\n";
+            timing_out << "Total inference time: " << total_inference_time << " ms\n";
             timing_out << "Average inference time per image: " << avg_time << " ms\n";
-            if (processed > 0) {
-                timing_out << "Total processing time per image: " << (total_time / processed) << " ms\n";
-            }
             timing_out << "\nDetailed per-image timing (ms):\n";
             for (size_t i = 0; i < inference_times.size(); ++i) {
                 timing_out << "Image " << (i + 1) << ": " << inference_times[i] << "\n";
