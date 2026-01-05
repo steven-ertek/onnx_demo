@@ -106,9 +106,19 @@ private:
 };
 
 cv::Mat preprocess(const cv::Mat& image, int target_w, int target_h) {
-    // 先转换为 RGB，再 resize（与 PyTorch 版本一致）
     cv::Mat rgb;
-    cv::cvtColor(image, rgb, cv::COLOR_BGR2RGB);
+    
+    // 检查通道数，如果是灰度图先转为RGB
+    if (image.channels() == 1) {
+        cv::cvtColor(image, rgb, cv::COLOR_GRAY2RGB);
+    } else if (image.channels() == 3) {
+        cv::cvtColor(image, rgb, cv::COLOR_BGR2RGB);
+    } else if (image.channels() == 4) {
+        cv::cvtColor(image, rgb, cv::COLOR_BGRA2RGB);
+    } else {
+        throw std::runtime_error("Unsupported image channel count: " + std::to_string(image.channels()));
+    }
+    
     cv::Mat resized;
     cv::resize(rgb, resized, cv::Size(target_w, target_h));
     // 归一化到 [0, 1]
@@ -207,11 +217,13 @@ int main(int argc, char* argv[]) {
     try {
         
         if (!std::filesystem::exists(model_path)) {
-            std::cerr << "Model not found: " << model_path << std::endl;
+            std::cerr << "ERROR: Model file not found: " << model_path << std::endl;
+            std::cerr << "Please check the model path and ensure the file exists." << std::endl;
             return 1;
         }
         if (!std::filesystem::exists(list_file)) {
-            std::cerr << "Test list not found: " << list_file << std::endl;
+            std::cerr << "ERROR: Image list file not found: " << list_file << std::endl;
+            std::cerr << "Please check the list file path and ensure the file exists." << std::endl;
             return 1;
         }
 
@@ -228,7 +240,8 @@ int main(int argc, char* argv[]) {
         }
 
         if (image_names.empty()) {
-            std::cerr << "No images listed in " << list_file << std::endl;
+            std::cerr << "ERROR: No images found in list file: " << list_file << std::endl;
+            std::cerr << "The list file is empty or all lines are blank." << std::endl;
             return 1;
         }
 
@@ -254,7 +267,16 @@ int main(int argc, char* argv[]) {
 
             cv::Mat original = cv::imread(image_path.string());
             if (original.empty()) {
-                std::cerr << "Failed to load image: " << image_path << std::endl;
+                std::cerr << "ERROR: Failed to load image: " << image_path << std::endl;
+                std::cerr << "  Possible causes: corrupted file, unsupported format, or permission denied" << std::endl;
+                ++errors;
+                continue;
+            }
+            
+            // 检查图片通道数
+            if (original.channels() != 1 && original.channels() != 3 && original.channels() != 4) {
+                std::cerr << "ERROR: Unsupported image channels: " << original.channels() 
+                          << " in " << image_path << std::endl;
                 ++errors;
                 continue;
             }
@@ -313,8 +335,27 @@ int main(int argc, char* argv[]) {
                 timing_out << "Image " << (i + 1) << ": " << inference_times[i] << "\n";
             }
         }
+    } catch (const ov::Exception& ex) {
+        std::cerr << "========================================" << std::endl;
+        std::cerr << "OpenVINO Error" << std::endl;
+        std::cerr << "========================================" << std::endl;
+        std::cerr << "Message: " << ex.what() << std::endl;
+        std::cerr << "\nPossible causes:" << std::endl;
+        std::cerr << "- Invalid model file or unsupported format" << std::endl;
+        std::cerr << "- Device not available (CPU/GPU)" << std::endl;
+        std::cerr << "- Missing OpenVINO plugins" << std::endl;
+        std::cerr << "========================================" << std::endl;
+        return 1;
     } catch (const std::exception& ex) {
-        std::cerr << "Error: " << ex.what() << std::endl;
+        std::cerr << "========================================" << std::endl;
+        std::cerr << "Runtime Error" << std::endl;
+        std::cerr << "========================================" << std::endl;
+        std::cerr << "Message: " << ex.what() << std::endl;
+        std::cerr << "\nPossible causes:" << std::endl;
+        std::cerr << "- File I/O error (permissions, disk space)" << std::endl;
+        std::cerr << "- Memory allocation failure" << std::endl;
+        std::cerr << "- Invalid image format" << std::endl;
+        std::cerr << "========================================" << std::endl;
         return 1;
     }
 

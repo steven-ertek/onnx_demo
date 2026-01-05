@@ -121,9 +121,19 @@ private:
 };
 
 cv::Mat preprocess(const cv::Mat& image, int target_width, int target_height) {
-    // 先转换为 RGB，再 resize（与 PyTorch 版本一致）
     cv::Mat rgb;
-    cv::cvtColor(image, rgb, cv::COLOR_BGR2RGB);
+    
+    // 检查通道数，如果是灰度图先转为RGB
+    if (image.channels() == 1) {
+        cv::cvtColor(image, rgb, cv::COLOR_GRAY2RGB);
+    } else if (image.channels() == 3) {
+        cv::cvtColor(image, rgb, cv::COLOR_BGR2RGB);
+    } else if (image.channels() == 4) {
+        cv::cvtColor(image, rgb, cv::COLOR_BGRA2RGB);
+    } else {
+        throw std::runtime_error("Unsupported image channel count: " + std::to_string(image.channels()));
+    }
+    
     cv::Mat resized;
     cv::resize(rgb, resized, cv::Size(target_width, target_height));
     // 归一化到 [0, 1]

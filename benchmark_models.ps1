@@ -99,19 +99,23 @@ foreach ($model in $models) {
     
     # 运行100次
     for ($i = 1; $i -le $iterations; $i++) {
-        Write-Host "`r进度: $i/$iterations " -NoNewline
+        Write-Host "`r[$engineName - $modelName] 运行: $i/$iterations " -NoNewline -ForegroundColor Cyan
         
         try {
-            # 执行推理，捕获标准输出和错误输出
-            $output = & $exePath `
+            # 执行推理，捕获错误输出
+            $startTime = Get-Date
+            $errorOutput = & $exePath `
                 --model $modelPath `
                 --images $imagesDir `
                 --list $testList `
                 --output $outputDir `
-                --timing "$timingFile.temp" 2>&1 `
-                --enable_save:$enable_save
+                --timing "$timingFile.temp" `
+                --save $enable_save 2>&1 | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] -or $_.ToString() -match "ERROR|Error|error" }
+            $exitCode = $LASTEXITCODE
+            $endTime = Get-Date
+            $execTime = ($endTime - $startTime).TotalSeconds
             
-            if ($LASTEXITCODE -eq 0) {
+            if ($exitCode -eq 0) {
                 $successCount++
                 
                 # 读取临时timing文件获取总推理时间
@@ -124,28 +128,48 @@ foreach ($model in $models) {
                 }
             } else {
                 $failCount++
-                $errorMsg = "运行 $i 失败 (退出码: $LASTEXITCODE)"
+                $errorMsg = "运行 $i 失败 (退出码: $exitCode)"
                 $errors += $errorMsg
-                $errorOutput = $output | Out-String
+                
+                # 记录详细错误信息
                 Add-Content -Path $errorFile -Value "========== 运行 $i =========="
-                Add-Content -Path $errorFile -Value $errorMsg
-                Add-Content -Path $errorFile -Value $errorOutput
+                Add-Content -Path $errorFile -Value "退出码: $exitCode"
+                Add-Content -Path $errorFile -Value "执行时间: $([Math]::Round($execTime, 2))s"
                 Add-Content -Path $errorFile -Value ""
-                Write-Host "`n警告: 第 $i 次运行失败 (退出码: $LASTEXITCODE)" -ForegroundColor Red
+                
+                if ($errorOutput) {
+                    Add-Content -Path $errorFile -Value "错误输出:"
+                    Add-Content -Path $errorFile -Value "----------------------------------------"
+                    $errorOutput | ForEach-Object { Add-Content -Path $errorFile -Value $_.ToString() }
+                } else {
+                    Add-Content -Path $errorFile -Value "未捕获到具体错误信息"
+                }
+                Add-Content -Path $errorFile -Value ""
+                
+                Write-Host "`r[$engineName - $modelName] 运行: $i/$iterations - 失败! (退出码: $exitCode)     " -ForegroundColor Red
             }
         } catch {
             $failCount++
             $errorMsg = "运行 $i 异常: $_"
             $errors += $errorMsg
+            
+            # 记录异常信息
             Add-Content -Path $errorFile -Value "========== 运行 $i =========="
-            Add-Content -Path $errorFile -Value $errorMsg
-            Add-Content -Path $errorFile -Value $_.Exception.Message
+            Add-Content -Path $errorFile -Value "异常类型: $($_.Exception.GetType().FullName)"
+            Add-Content -Path $errorFile -Value "异常消息: $($_.Exception.Message)"
+            Add-Content -Path $errorFile -Value "异常类型: $($_.Exception.GetType().FullName)"
+            Add-Content -Path $errorFile -Value "异常消息: $($_.Exception.Message)"
+            if ($_.Exception.StackTrace) {
+                Add-Content -Path $errorFile -Value ""
+                Add-Content -Path $errorFile -Value "堆栈跟踪:"
+                Add-Content -Path $errorFile -Value $_.Exception.StackTrace
+            }
             Add-Content -Path $errorFile -Value ""
-            Write-Host "`n错误: 第 $i 次运行出现异常 - $_" -ForegroundColor Red
+            Write-Host "`r[$engineName - $modelName] 运行: $i/$iterations - 异常!     " -ForegroundColor Red
         }
     }
     
-    Write-Host "`n完成!" -ForegroundColor Green
+    Write-Host "`r[$engineName - $modelName] 完成! 成功: $successCount, 失败: $failCount                    " -ForegroundColor Green
     
     # 计算统计结果
     if ($totalInferenceTimes.Count -gt 0) {
